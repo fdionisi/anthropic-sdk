@@ -1,0 +1,19 @@
+[package]
+name = "anthropic_bedrock"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/bedrock.rs"
+
+[dependencies]
+anthropic.workspace = true
+anyhow.workspace = true
+reqwest.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+futures.workspace = true
+tokio.workspace = true
