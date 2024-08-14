@@ -348,18 +348,19 @@ impl CreateMessageRequestBuilder {
     }
 }
 
+#[async_trait]
 pub trait Requester {
     fn base_url(&self) -> String;
 
     fn endpoint_url(&self, body: &CreateMessageRequestWithStream) -> String;
 
-    fn request_builder<U>(
+    async fn request_builder<U>(
         &self,
         url: U,
         body: CreateMessageRequestWithStream,
     ) -> Result<RequestBuilder>
     where
-        U: IntoUrl;
+        U: IntoUrl + Send;
 }
 
 #[async_trait]
@@ -399,8 +400,9 @@ pub enum Event {
     Error(ErrorDetails),
 }
 
+#[async_trait]
 pub trait MessagesStream {
-    fn messages_stream(
+    async fn messages_stream(
         &self,
         request: CreateMessageRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<Event>> + '_>>>;
@@ -416,7 +418,8 @@ where
             create_message_request: request,
             stream: false,
         };
-        let response = self
+
+        Ok(self
             .request_builder(
                 format!(
                     "{}{}",
@@ -424,30 +427,21 @@ where
                     self.endpoint_url(&create_message_request_with_stream)
                 ),
                 create_message_request_with_stream,
-            )?
+            )
+            .await?
             .send()
-            .await?;
-
-        dbg!(response.status());
-        dbg!(response.headers());
-        let text_response = dbg!(response.text().await?);
-
-        Ok(serde_json::from_str(&text_response)?)
-
-        // Ok(self
-        //     .request_builder(format!("{}/v1/messages", self.base_url()), request)?
-        //     .send()
-        //     .await?
-        //     .json()
-        //     .await?)
+            .await?
+            .json()
+            .await?)
     }
 }
 
+#[async_trait]
 impl<T> MessagesStream for T
 where
     T: Requester + Sync,
 {
-    fn messages_stream(
+    async fn messages_stream(
         &self,
         request: CreateMessageRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<Event>> + '_>>> {
@@ -455,18 +449,21 @@ where
             create_message_request: request,
             stream: true,
         };
-        let mut es = EventSource::new(self.request_builder(
-            format!(
-                "{}{}",
-                self.base_url(),
-                self.endpoint_url(&create_message_request_with_stream)
-            ),
-            create_message_request_with_stream,
-        )?)?;
+        let mut es = EventSource::new(
+            self.request_builder(
+                format!(
+                    "{}{}",
+                    self.base_url(),
+                    self.endpoint_url(&create_message_request_with_stream)
+                ),
+                create_message_request_with_stream,
+            )
+            .await?,
+        )?;
 
         Ok(stream! {
             while let Some(event) = es.next().await {
-                match dbg!(event) {
+                match event {
                     Ok(SsrEvent::Open) => continue,
                     Ok(SsrEvent::Message(message_event)) => {
                         yield Ok(serde_json::from_str::<Event>(&message_event.data,)?)
@@ -482,17 +479,5 @@ where
             }
         }
         .boxed())
-
-        // Ok(Box::pin(es.filter_map(|event| async {
-        //     match dbg!(event) {
-        //         Ok(SsrEvent::Open) => None,
-        //         Ok(SsrEvent::Message(message_event)) => Some(Ok(serde_json::from_str::<Event>(
-        //             &message_event.data,
-        //         )
-        //         .unwrap())),
-        //         Err(reqwest_eventsource::Error::StreamEnded) => None,
-        //         Err(err) => Some(Err(anyhow!("Unknown {}", err))),
-        //     }
-        // })))
     }
 }

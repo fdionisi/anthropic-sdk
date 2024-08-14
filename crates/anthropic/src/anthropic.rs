@@ -1,6 +1,7 @@
 pub mod messages;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use messages::{CreateMessageRequestWithStream, Requester};
 use reqwest::{Client, IntoUrl, RequestBuilder};
 use secrecy::{ExposeSecret, SecretString};
@@ -62,6 +63,7 @@ impl AnthropicBuilder {
     }
 }
 
+#[async_trait]
 impl Requester for Anthropic {
     fn base_url(&self) -> String {
         DEFAULT_API_ENDPOINT.into()
@@ -71,13 +73,13 @@ impl Requester for Anthropic {
         "/v1/messages".into()
     }
 
-    fn request_builder<U>(
+    async fn request_builder<U>(
         &self,
         url: U,
         body: CreateMessageRequestWithStream,
     ) -> Result<RequestBuilder>
     where
-        U: IntoUrl,
+        U: IntoUrl + Send,
     {
         let mut req = self.client.post(url);
         if body.stream {
@@ -122,13 +124,15 @@ mod tests {
     async fn test_messages_stream() -> Result<()> {
         let client = Anthropic::builder().build()?;
 
-        let mut s = client.messages_stream(
-            CreateMessageRequest::builder()
-                .model(Model::ClaudeThreeHaiku)
-                .messages(vec![Message::user(vec!["Hi!".into()])])
-                .max_tokens(100)
-                .build()?,
-        )?;
+        let mut s = client
+            .messages_stream(
+                CreateMessageRequest::builder()
+                    .model(Model::ClaudeThreeHaiku)
+                    .messages(vec![Message::user(vec!["Hi!".into()])])
+                    .max_tokens(100)
+                    .build()?,
+            )
+            .await?;
 
         while let Some(response) = s.next().await {
             dbg!(response)?;

@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/anthropic", "crates/bedrock", "crates/vertex_ai"]
+members = ["crates/anthropic", "crates/bedrock", "crates/vertexai"]
 
 [workspace.dependencies]
 anthropic = { path = "crates/anthropic" }
 anthropic_bedrock = { path = "crates/bedrock" }
-anthropic_vertex_ai = { path = "crates/vertex_ai" }
+anthropic_vertexai = { path = "crates/vertexai" }
 anyhow = "1"
 async-stream = "0.3.5"
 async-trait = "0.1.81"

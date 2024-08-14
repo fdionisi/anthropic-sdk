@@ -1,9 +1,13 @@
+use std::sync::Arc;
+
 use anthropic::messages::{
     CreateMessageRequestWithStream, Message, Metadata, Requester, Tool, ToolChoice,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use async_trait::async_trait;
+use google_cloud_auth::{project::Config, token::DefaultTokenSourceProvider};
+use google_cloud_token::{TokenSource, TokenSourceProvider as _};
 use reqwest::{Client, IntoUrl, RequestBuilder};
-use secrecy::{ExposeSecret, SecretString};
 
 pub use anthropic::messages;
 
@@ -31,13 +35,12 @@ pub struct AnthropicVertexAi {
     client: Client,
     project: String,
     region: String,
-    api_key: SecretString,
+    token_source: Arc<dyn TokenSource>,
 }
 
 pub struct AnthropicVertexAiBuilder {
     project: Option<String>,
     region: Option<String>,
-    api_key: Option<SecretString>,
 }
 
 impl AnthropicVertexAi {
@@ -45,7 +48,6 @@ impl AnthropicVertexAi {
         AnthropicVertexAiBuilder {
             project: None,
             region: None,
-            api_key: None,
         }
     }
 }
@@ -61,23 +63,20 @@ impl AnthropicVertexAiBuilder {
         self
     }
 
-    pub fn api_key<S>(mut self, api_key: S) -> Self
-    where
-        S: AsRef<str>,
-    {
-        self.api_key = Some(SecretString::new(api_key.as_ref().to_string()));
-        self
-    }
+    pub async fn build(&self) -> Result<AnthropicVertexAi> {
+        let config = Config {
+            audience: None,
+            scopes: Some(&["https://www.googleapis.com/auth/cloud-platform"]),
+            sub: None,
+        };
 
-    pub fn build(&self) -> Result<AnthropicVertexAi> {
+        let tsp = DefaultTokenSourceProvider::new(config).await?;
+        let ts = tsp.token_source();
+
         Ok(AnthropicVertexAi {
             project: self.project.to_owned().unwrap(),
             region: self.region.to_owned().unwrap(),
-            api_key: self
-                .api_key
-                .to_owned()
-                .or_else(|| std::env::var("GOOGLECLOUD_API_KEY").ok().map(|s| s.into()))
-                .ok_or_else(|| anyhow::anyhow!("API key is required"))?,
+            token_source: ts,
             client: Client::new(),
         })
     }
@@ -126,6 +125,7 @@ impl From<CreateMessageRequestWithStream> for VertexAiCreateMessageRequest {
     }
 }
 
+#[async_trait]
 impl Requester for AnthropicVertexAi {
     fn base_url(&self) -> String {
         format!(
@@ -147,13 +147,13 @@ impl Requester for AnthropicVertexAi {
         )
     }
 
-    fn request_builder<U>(
+    async fn request_builder<U>(
         &self,
         url: U,
         body: CreateMessageRequestWithStream,
     ) -> Result<RequestBuilder>
     where
-        U: IntoUrl,
+        U: IntoUrl + Send,
     {
         let mut req = self.client.post(url);
         if body.stream {
@@ -163,7 +163,10 @@ impl Requester for AnthropicVertexAi {
         Ok(req
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.api_key.expose_secret()),
+                self.token_source
+                    .token()
+                    .await
+                    .map_err(|err| anyhow!("{:?}", err))?,
             )
             .header("x-goog-user-project", &self.project)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -184,10 +187,10 @@ mod tests {
     #[tokio::test]
     async fn test_messages() -> Result<()> {
         let client = AnthropicVertexAi::builder()
-            .api_key(std::env::var("GCLOUD_API_KEY")?)
             .project(std::env::var("GCLOUD_PROJECT_ID")?)
             .region(std::env::var("GCLOUD_REGION")?)
-            .build()?;
+            .build()
+            .await?;
 
         let response = client
             .messages(
@@ -207,18 +210,20 @@ mod tests {
     #[tokio::test]
     async fn test_messages_stream() -> Result<()> {
         let client = AnthropicVertexAi::builder()
-            .api_key(std::env::var("GCLOUD_API_KEY")?)
             .project(std::env::var("GCLOUD_PROJECT_ID")?)
             .region(std::env::var("GCLOUD_REGION")?)
-            .build()?;
+            .build()
+            .await?;
 
-        let mut s = client.messages_stream(
-            CreateMessageRequest::builder()
-                .model(Model::ClaudeThreeDotFiveSonnet)
-                .messages(vec![Message::user(vec!["Hi!".into()])])
-                .max_tokens(100)
-                .build()?,
-        )?;
+        let mut s = client
+            .messages_stream(
+                CreateMessageRequest::builder()
+                    .model(Model::ClaudeThreeDotFiveSonnet)
+                    .messages(vec![Message::user(vec!["Hi!".into()])])
+                    .max_tokens(100)
+                    .build()?,
+            )
+            .await?;
 
         while let Some(response) = s.next().await {
             dbg!(response)?;

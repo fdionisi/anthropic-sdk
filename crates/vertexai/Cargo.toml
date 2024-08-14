@@ -1,14 +1,17 @@
 [package]
-name = "anthropic_vertex_ai"
+name = "anthropic_vertexai"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-path = "src/vertex_ai.rs"
+path = "src/vertexai.rs"
 
 [dependencies]
 anthropic.workspace = true
 anyhow.workspace = true
+async-trait.workspace = true
+google-cloud-auth = "0.16.0"
+google-cloud-token = "0.1.2"
 reqwest.workspace = true
 secrecy.workspace = true
 serde.workspace = true
