@@ -405,7 +405,7 @@ pub trait MessagesStream {
     async fn messages_stream(
         &self,
         request: CreateMessageRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<Event>> + '_>>>;
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Event>> + Send>>>;
 }
 
 #[async_trait]
@@ -444,7 +444,7 @@ where
     async fn messages_stream(
         &self,
         request: CreateMessageRequest,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<Event>> + '_>>> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Event>> + Send>>> {
         let create_message_request_with_stream = CreateMessageRequestWithStream {
             create_message_request: request,
             stream: true,
