@@ -45,16 +45,21 @@ impl FromStr for Model {
 
 pub struct Anthropic {
     api_key: SecretString,
+    base_url: String,
     client: Client,
 }
 
 pub struct AnthropicBuilder {
     api_key: Option<SecretString>,
+    base_url: Option<String>,
 }
 
 impl Anthropic {
     pub fn builder() -> AnthropicBuilder {
-        AnthropicBuilder { api_key: None }
+        AnthropicBuilder {
+            api_key: None,
+            base_url: None,
+        }
     }
 }
 
@@ -67,6 +72,14 @@ impl AnthropicBuilder {
         self
     }
 
+    pub fn base_url<S>(&mut self, base_url: S) -> &mut Self
+    where
+        S: AsRef<str>,
+    {
+        self.base_url = Some(base_url.as_ref().to_string());
+        self
+    }
+
     pub fn build(&self) -> Result<Anthropic> {
         Ok(Anthropic {
             api_key: self
@@ -74,6 +87,10 @@ impl AnthropicBuilder {
                 .to_owned()
                 .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok().map(|s| s.into()))
                 .ok_or_else(|| anyhow::anyhow!("API key is required"))?,
+            base_url: self
+                .base_url
+                .to_owned()
+                .unwrap_or_else(|| DEFAULT_API_ENDPOINT.into()),
             client: Client::new(),
         })
     }
@@ -82,7 +99,7 @@ impl AnthropicBuilder {
 #[async_trait]
 impl Requester for Anthropic {
     fn base_url(&self) -> String {
-        DEFAULT_API_ENDPOINT.into()
+        self.base_url.to_owned()
     }
 
     fn endpoint_url(&self, _: &CreateMessageRequestWithStream) -> String {
