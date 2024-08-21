@@ -230,6 +230,8 @@ pub struct Usage {
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct MessageResponse {
     pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
     pub model: String,
     pub role: String,
     pub content: Vec<ContentPart>,
