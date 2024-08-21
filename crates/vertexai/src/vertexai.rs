@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use google_cloud_auth::{project::Config, token::DefaultTokenSourceProvider};
 use google_cloud_token::{TokenSource, TokenSourceProvider as _};
-use reqwest::{Client, IntoUrl, RequestBuilder};
+use reqwest::{Client, RequestBuilder};
 
 pub use anthropic::messages;
 
@@ -147,14 +147,11 @@ impl Requester for AnthropicVertexAi {
         )
     }
 
-    async fn request_builder<U>(
+    async fn request_builder(
         &self,
-        url: U,
+        url: String,
         body: CreateMessageRequestWithStream,
-    ) -> Result<RequestBuilder>
-    where
-        U: IntoUrl + Send,
-    {
+    ) -> Result<RequestBuilder> {
         let mut req = self.client.post(url);
         if body.stream {
             req = req.header("X-Stainless-Helper-Method", "stream");
@@ -170,8 +167,8 @@ impl Requester for AnthropicVertexAi {
             )
             .header("x-goog-user-project", &self.project)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(dbg!(serde_json::to_string(
-                &VertexAiCreateMessageRequest::from(body)
+            .body(serde_json::to_string(&VertexAiCreateMessageRequest::from(
+                body,
             ))?))
     }
 }
@@ -192,7 +189,7 @@ mod tests {
             .build()
             .await?;
 
-        let response = client
+        let _ = client
             .messages(
                 CreateMessageRequest::builder()
                     .model(Model::ClaudeThreeDotFiveSonnet)
@@ -201,8 +198,6 @@ mod tests {
                     .build()?,
             )
             .await?;
-
-        dbg!(response);
 
         Ok(())
     }
@@ -226,7 +221,7 @@ mod tests {
             .await?;
 
         while let Some(response) = s.next().await {
-            dbg!(response)?;
+            response?;
         }
 
         Ok(())

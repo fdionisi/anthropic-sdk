@@ -3,7 +3,7 @@ pub mod messages;
 use anyhow::Result;
 use async_trait::async_trait;
 use messages::{CreateMessageRequestWithStream, Requester};
-use reqwest::{Client, IntoUrl, RequestBuilder};
+use reqwest::{Client, RequestBuilder};
 use secrecy::{ExposeSecret, SecretString};
 
 const DEFAULT_API_ENDPOINT: &str = "https://api.anthropic.com";
@@ -73,14 +73,11 @@ impl Requester for Anthropic {
         "/v1/messages".into()
     }
 
-    async fn request_builder<U>(
+    async fn request_builder(
         &self,
-        url: U,
+        url: String,
         body: CreateMessageRequestWithStream,
-    ) -> Result<RequestBuilder>
-    where
-        U: IntoUrl + Send,
-    {
+    ) -> Result<RequestBuilder> {
         let mut req = self.client.post(url);
         if body.stream {
             req = req.header("X-Stainless-Helper-Method", "stream");

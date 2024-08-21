@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use async_stream::stream;
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
-use reqwest::{IntoUrl, RequestBuilder};
+use reqwest::RequestBuilder;
 use reqwest_eventsource::{Event as SsrEvent, EventSource};
 use serde_json::Value;
 
@@ -354,13 +354,11 @@ pub trait Requester {
 
     fn endpoint_url(&self, body: &CreateMessageRequestWithStream) -> String;
 
-    async fn request_builder<U>(
+    async fn request_builder(
         &self,
-        url: U,
+        url: String,
         body: CreateMessageRequestWithStream,
-    ) -> Result<RequestBuilder>
-    where
-        U: IntoUrl + Send;
+    ) -> Result<RequestBuilder>;
 }
 
 #[async_trait]
@@ -449,6 +447,7 @@ where
             create_message_request: request,
             stream: true,
         };
+
         let mut es = EventSource::new(
             self.request_builder(
                 format!(
