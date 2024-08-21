@@ -194,7 +194,7 @@ pub struct CreateMessageRequestWithStream {
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub struct CreateMessageRequest_ {
+pub struct IncomingCreateMessageRequest {
     #[serde(flatten)]
     pub create_message_request: CreateMessageRequest,
     pub stream: Option<bool>,
