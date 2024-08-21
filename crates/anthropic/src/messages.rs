@@ -56,7 +56,7 @@ where
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(untagged, rename_all = "lowercase")]
 pub enum MediaType {
     #[serde(rename = "image/jpeg")]
     ImageJpeg,
@@ -72,7 +72,6 @@ pub enum MediaType {
 pub struct ImageSource {
     #[serde(rename = "type")]
     pub kind: String,
-    #[serde(rename = "media_type")]
     pub media_type: MediaType,
     pub data: String,
 }
