@@ -24,7 +24,7 @@ impl std::fmt::Display for Role {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Message {
     pub role: Role,
     pub content: Vec<Content>,
@@ -98,14 +98,14 @@ where
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Metadata {
     #[serde(rename = "user_id")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolChoiceKind {
     Auto,
@@ -113,7 +113,7 @@ pub enum ToolChoiceKind {
     Tool,
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ToolChoice {
     #[serde(rename = "type")]
     pub kind: ToolChoiceKind,
@@ -125,7 +125,7 @@ impl From<ToolChoiceKind> for ToolChoice {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ToolInputSchema {
     #[serde(rename = "type")]
     pub type_: String,
@@ -133,7 +133,7 @@ pub struct ToolInputSchema {
     pub properties: Option<Value>,
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Tool {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -142,7 +142,7 @@ pub struct Tool {
     pub input_schema: ToolInputSchema,
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct CreateMessageRequest {
     pub model: String,
     pub messages: Vec<Message>,
@@ -170,27 +170,27 @@ pub struct CreateMessageRequest {
     pub top_p: Option<f32>,
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct CreateMessageRequestWithStream {
     #[serde(flatten)]
     pub create_message_request: CreateMessageRequest,
     pub stream: bool,
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct CreateMessageRequest_ {
     #[serde(flatten)]
     pub create_message_request: CreateMessageRequest,
     pub stream: Option<bool>,
 }
 
-#[derive(Clone, Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageResponseKind {
     Message,
 }
 
-#[derive(Clone, Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StopReason {
     #[serde(rename = "end_turn")]
@@ -203,7 +203,7 @@ pub enum StopReason {
     ToolUse,
 }
 
-#[derive(Clone, Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Usage {
     #[serde(rename = "input_tokens")]
     pub input_tokens: Option<u32>,
@@ -211,7 +211,7 @@ pub struct Usage {
     pub output_tokens: u32,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct MessageResponse {
     pub id: String,
     pub model: String,
@@ -222,14 +222,14 @@ pub struct MessageResponse {
     pub usage: Usage,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CreateMessageResponse {
     Message(MessageResponse),
     Error { error: ErrorDetails },
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct ErrorDetails {
     #[serde(rename = "type")]
     pub kind: String,
@@ -366,13 +366,13 @@ pub trait Messages {
     async fn messages(&self, request: CreateMessageRequest) -> Result<CreateMessageResponse>;
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct EventMessageDelta {
     pub stop_reason: StopReason,
     pub stop_sequence: Option<String>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
     Ping,
