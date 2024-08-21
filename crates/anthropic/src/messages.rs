@@ -8,6 +8,10 @@ use reqwest::RequestBuilder;
 use reqwest_eventsource::{Event as SsrEvent, EventSource};
 use serde_json::Value;
 
+pub trait AnthropicSdk: Messages + MessagesStream {}
+
+impl<T> AnthropicSdk for T where T: Messages + MessagesStream + Send + Sync {}
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
