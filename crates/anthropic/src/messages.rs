@@ -349,7 +349,7 @@ impl CreateMessageRequestBuilder {
 }
 
 #[async_trait]
-pub trait Requester {
+pub trait Requester: Send + Sync {
     fn base_url(&self) -> String;
 
     fn endpoint_url(&self, body: &CreateMessageRequestWithStream) -> String;
@@ -409,7 +409,7 @@ pub trait MessagesStream {
 #[async_trait]
 impl<T> Messages for T
 where
-    T: Requester + Sync,
+    T: Requester,
 {
     async fn messages(&self, request: CreateMessageRequest) -> Result<CreateMessageResponse> {
         let create_message_request_with_stream = CreateMessageRequestWithStream {
@@ -437,7 +437,7 @@ where
 #[async_trait]
 impl<T> MessagesStream for T
 where
-    T: Requester + Sync,
+    T: Requester,
 {
     async fn messages_stream(
         &self,
