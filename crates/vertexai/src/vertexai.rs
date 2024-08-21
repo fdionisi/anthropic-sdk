@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use anthropic::messages::{
     CreateMessageRequestWithStream, Message, Metadata, Requester, Tool, ToolChoice,
@@ -27,6 +27,20 @@ impl ToString for Model {
             Model::ClaudeThreeSonnet => "claude-3-sonnet@20240229".to_string(),
             Model::ClaudeThreeOpus => "claude-3-opus@20240229".to_string(),
             Model::ClaudeThreeHaiku => "claude-3-haiku@20240307".to_string(),
+        }
+    }
+}
+
+impl FromStr for Model {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "claude-3-5-sonnet@20240620" => Ok(Model::ClaudeThreeDotFiveSonnet),
+            "claude-3-sonnet@20240229" => Ok(Model::ClaudeThreeSonnet),
+            "claude-3-opus@20240229" => Ok(Model::ClaudeThreeOpus),
+            "claude-3-haiku@20240307" => Ok(Model::ClaudeThreeHaiku),
+            _ => Err(anyhow::anyhow!("model not supported: {}", s)),
         }
     }
 }
