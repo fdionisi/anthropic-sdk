@@ -124,7 +124,7 @@ mod tests {
             .messages(
                 CreateMessageRequest::builder()
                     .model(Model::ClaudeThreeHaiku)
-                    .messages(vec![Message::user(vec!["Hi!".into()])])
+                    .messages(vec![Message::user("Hi!".into())])
                     .max_tokens(100)
                     .build()?,
             )
@@ -141,7 +141,7 @@ mod tests {
             .messages_stream(
                 CreateMessageRequest::builder()
                     .model(Model::ClaudeThreeHaiku)
-                    .messages(vec![Message::user(vec!["Hi!".into()])])
+                    .messages(vec![Message::user("Hi!".into())])
                     .max_tokens(100)
                     .build()?,
             )

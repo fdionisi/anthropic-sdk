@@ -27,15 +27,31 @@ impl std::fmt::Display for Role {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Message {
     pub role: Role,
-    pub content: Vec<Content>,
+    pub content: Content,
 }
 
 impl Message {
-    pub fn user(content: Vec<Content>) -> Self {
+    pub fn user(content: Content) -> Self {
         Self {
             role: Role::User,
             content,
         }
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(untagged)]
+pub enum Content {
+    Single(String),
+    Multi(Vec<ContentPart>),
+}
+
+impl<S> From<S> for Content
+where
+    S: AsRef<str>,
+{
+    fn from(text: S) -> Self {
+        Self::Single(text.as_ref().to_string())
     }
 }
 
@@ -63,7 +79,7 @@ pub struct ImageSource {
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum Content {
+pub enum ContentPart {
     Text {
         text: String,
     },
@@ -87,7 +103,7 @@ pub enum Content {
     },
 }
 
-impl<S> From<S> for Content
+impl<S> From<S> for ContentPart
 where
     S: AsRef<str>,
 {
@@ -178,7 +194,7 @@ pub struct CreateMessageRequestWithStream {
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub struct IncomingCreateMessageRequest {
+pub struct CreateMessageRequest_ {
     #[serde(flatten)]
     pub create_message_request: CreateMessageRequest,
     pub stream: Option<bool>,
@@ -216,7 +232,7 @@ pub struct MessageResponse {
     pub id: String,
     pub model: String,
     pub role: String,
-    pub content: Vec<Content>,
+    pub content: Vec<ContentPart>,
     pub stop_reason: Option<StopReason>,
     pub stop_sequence: Option<String>,
     pub usage: Usage,
@@ -381,11 +397,11 @@ pub enum Event {
     },
     ContentBlockStart {
         index: u64,
-        content_block: Content,
+        content_block: ContentPart,
     },
     ContentBlockDelta {
         index: u64,
-        delta: Content,
+        delta: ContentPart,
     },
     ContentBlockStop {
         index: u64,
