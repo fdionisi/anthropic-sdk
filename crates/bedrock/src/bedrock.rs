@@ -92,7 +92,47 @@ impl From<CreateMessageRequestWithStream> for BedrockCreateMessageRequest {
 #[async_trait]
 impl Messages for AnthropicBedrock {
     async fn messages(&self, request: CreateMessageRequest) -> Result<CreateMessageResponse> {
-        let response = self
+        let mut test_config = types::ToolConfiguration::builder();
+
+        if let Some(tools) = request.tools.to_owned() {
+            test_config = test_config.set_tools(Some(
+                tools
+                    .iter()
+                    .map(|tool| {
+                        types::Tool::ToolSpec(
+                            types::ToolSpecification::builder()
+                                .name(tool.name.clone())
+                                .set_description(tool.description.clone())
+                                .input_schema(types::ToolInputSchema::Json(
+                                    serde_json::to_value(&tool.input_schema)
+                                        .and_then(|val| {
+                                            serde_json::from_value::<aws_smithy_types::Document>(
+                                                val,
+                                            )
+                                        })
+                                        .unwrap(),
+                                ))
+                                .build()
+                                .unwrap(),
+                        )
+                    })
+                    .collect(),
+            ));
+        }
+
+        if let Some(tool_choice) = request.tool_choice {
+            test_config = test_config.set_tool_choice(Some(match tool_choice.kind {
+                messages::ToolChoiceKind::Auto => {
+                    types::ToolChoice::Auto(types::AutoToolChoice::builder().build())
+                }
+                messages::ToolChoiceKind::Any => {
+                    types::ToolChoice::Any(types::AnyToolChoice::builder().build())
+                }
+                messages::ToolChoiceKind::Tool => unreachable!(),
+            }));
+        }
+
+        let mut bd_request = self
             .client
             .converse()
             .model_id(request.model.to_owned())
@@ -176,46 +216,6 @@ impl Messages for AnthropicBedrock {
                     })
                     .collect(),
             ))
-            .tool_config(
-                types::ToolConfiguration::builder()
-                    .set_tools(request.tools.map(|tools| {
-                        tools
-                            .iter()
-                            .map(|tool| {
-                                types::Tool::ToolSpec(
-                                    types::ToolSpecification::builder()
-                                        .name(tool.name.clone())
-                                        .set_description(tool.description.clone())
-                                        .input_schema(types::ToolInputSchema::Json(
-                                            serde_json::to_value(&tool.input_schema)
-                                                .and_then(|val| {
-                                                    serde_json::from_value::<
-                                                        aws_smithy_types::Document,
-                                                    >(
-                                                        val
-                                                    )
-                                                })
-                                                .unwrap(),
-                                        ))
-                                        .build()
-                                        .unwrap(),
-                                )
-                            })
-                            .collect()
-                    }))
-                    .set_tool_choice(request.tool_choice.map(
-                        |tool_choice| match tool_choice.kind {
-                            messages::ToolChoiceKind::Auto => {
-                                types::ToolChoice::Auto(types::AutoToolChoice::builder().build())
-                            }
-                            messages::ToolChoiceKind::Any => {
-                                types::ToolChoice::Any(types::AnyToolChoice::builder().build())
-                            }
-                            messages::ToolChoiceKind::Tool => unreachable!(),
-                        },
-                    ))
-                    .build()?,
-            )
             .set_system(
                 request
                     .system
@@ -228,9 +228,13 @@ impl Messages for AnthropicBedrock {
                     .set_temperature(request.temperature)
                     .set_top_p(request.top_p)
                     .build(),
-            )
-            .send()
-            .await?;
+            );
+
+        if request.tools.is_some() {
+            bd_request = bd_request.set_tool_config(Some(test_config.build().unwrap()));
+        }
+
+        let response = bd_request.send().await?;
 
         let message = response.output().unwrap();
         let message = message.as_message().unwrap();
@@ -293,7 +297,47 @@ impl MessagesStream for AnthropicBedrock {
         &self,
         request: CreateMessageRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<Event>> + Send>>> {
-        let response = self
+        let mut test_config = types::ToolConfiguration::builder();
+
+        if let Some(tools) = request.tools.to_owned() {
+            test_config = test_config.set_tools(Some(
+                tools
+                    .iter()
+                    .map(|tool| {
+                        types::Tool::ToolSpec(
+                            types::ToolSpecification::builder()
+                                .name(tool.name.clone())
+                                .set_description(tool.description.clone())
+                                .input_schema(types::ToolInputSchema::Json(
+                                    serde_json::to_value(&tool.input_schema)
+                                        .and_then(|val| {
+                                            serde_json::from_value::<aws_smithy_types::Document>(
+                                                val,
+                                            )
+                                        })
+                                        .unwrap(),
+                                ))
+                                .build()
+                                .unwrap(),
+                        )
+                    })
+                    .collect(),
+            ));
+        }
+
+        if let Some(tool_choice) = request.tool_choice.to_owned() {
+            test_config = test_config.set_tool_choice(Some(match tool_choice.kind {
+                messages::ToolChoiceKind::Auto => {
+                    types::ToolChoice::Auto(types::AutoToolChoice::builder().build())
+                }
+                messages::ToolChoiceKind::Any => {
+                    types::ToolChoice::Any(types::AnyToolChoice::builder().build())
+                }
+                messages::ToolChoiceKind::Tool => unreachable!(),
+            }));
+        }
+
+        let mut bd_request = self
             .client
             .converse_stream()
             .model_id(request.model.to_owned())
@@ -387,46 +431,6 @@ impl MessagesStream for AnthropicBedrock {
                     .system
                     .map(|system| vec![types::SystemContentBlock::Text(system)]),
             )
-            .tool_config(
-                types::ToolConfiguration::builder()
-                    .set_tools(request.tools.map(|tools| {
-                        tools
-                            .iter()
-                            .map(|tool| {
-                                types::Tool::ToolSpec(
-                                    types::ToolSpecification::builder()
-                                        .name(tool.name.clone())
-                                        .set_description(tool.description.clone())
-                                        .input_schema(types::ToolInputSchema::Json(
-                                            serde_json::to_value(&tool.input_schema)
-                                                .and_then(|val| {
-                                                    serde_json::from_value::<
-                                                        aws_smithy_types::Document,
-                                                    >(
-                                                        val
-                                                    )
-                                                })
-                                                .unwrap(),
-                                        ))
-                                        .build()
-                                        .unwrap(),
-                                )
-                            })
-                            .collect()
-                    }))
-                    .set_tool_choice(request.tool_choice.map(
-                        |tool_choice| match tool_choice.kind {
-                            messages::ToolChoiceKind::Auto => {
-                                types::ToolChoice::Auto(types::AutoToolChoice::builder().build())
-                            }
-                            messages::ToolChoiceKind::Any => {
-                                types::ToolChoice::Any(types::AnyToolChoice::builder().build())
-                            }
-                            messages::ToolChoiceKind::Tool => unreachable!(),
-                        },
-                    ))
-                    .build()?,
-            )
             .inference_config(
                 types::InferenceConfiguration::builder()
                     .set_max_tokens(Some(request.max_tokens as i32))
@@ -434,9 +438,13 @@ impl MessagesStream for AnthropicBedrock {
                     .set_temperature(request.temperature)
                     .set_top_p(request.top_p)
                     .build(),
-            )
-            .send()
-            .await?;
+            );
+
+        if request.tools.is_some() {
+            bd_request = bd_request.set_tool_config(Some(test_config.build().unwrap()));
+        }
+
+        let response = bd_request.send().await?;
 
         let model = request.model.clone();
         Ok(stream! {
