@@ -1,12 +1,12 @@
-use std::pin::Pin;
+use std::{collections::HashSet, pin::Pin};
 
 pub use anthropic::messages;
 use anthropic::messages::{
     Content, ContentPart, CreateMessageRequest, CreateMessageRequestWithStream,
-    CreateMessageResponse, Event, ImageSource, MediaType, Message, MessageResponse, Messages,
-    MessagesStream, Metadata, Role, StopReason, Tool, ToolChoice, Usage,
+    CreateMessageResponse, Event, EventMessageDelta, ImageSource, MediaType, Message,
+    MessageResponse, Messages, MessagesStream, Metadata, StopReason, Tool, ToolChoice, Usage,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_stream::stream;
 use async_trait::async_trait;
 use aws_config::SdkConfig;
@@ -176,6 +176,46 @@ impl Messages for AnthropicBedrock {
                     })
                     .collect(),
             ))
+            .tool_config(
+                types::ToolConfiguration::builder()
+                    .set_tools(request.tools.map(|tools| {
+                        tools
+                            .iter()
+                            .map(|tool| {
+                                types::Tool::ToolSpec(
+                                    types::ToolSpecification::builder()
+                                        .name(tool.name.clone())
+                                        .set_description(tool.description.clone())
+                                        .input_schema(types::ToolInputSchema::Json(
+                                            serde_json::to_value(&tool.input_schema)
+                                                .and_then(|val| {
+                                                    serde_json::from_value::<
+                                                        aws_smithy_types::Document,
+                                                    >(
+                                                        val
+                                                    )
+                                                })
+                                                .unwrap(),
+                                        ))
+                                        .build()
+                                        .unwrap(),
+                                )
+                            })
+                            .collect()
+                    }))
+                    .set_tool_choice(request.tool_choice.map(
+                        |tool_choice| match tool_choice.kind {
+                            messages::ToolChoiceKind::Auto => {
+                                types::ToolChoice::Auto(types::AutoToolChoice::builder().build())
+                            }
+                            messages::ToolChoiceKind::Any => {
+                                types::ToolChoice::Any(types::AnyToolChoice::builder().build())
+                            }
+                            messages::ToolChoiceKind::Tool => unreachable!(),
+                        },
+                    ))
+                    .build()?,
+            )
             .set_system(
                 request
                     .system
@@ -199,7 +239,7 @@ impl Messages for AnthropicBedrock {
             id: response.request_id().unwrap().to_string(),
             kind: "message".to_string(),
             model: request.model,
-            role: Role::Assistant.to_string(),
+            role: "assistant".to_string(),
             content: message
                 .content()
                 .iter()
@@ -236,10 +276,13 @@ impl Messages for AnthropicBedrock {
                 _ => unreachable!(),
             }),
             stop_sequence: None,
-            usage: Usage {
-                input_tokens: None,
-                output_tokens: 0,
-            },
+            usage: response
+                .usage
+                .map(|usage| Usage {
+                    input_tokens: Some(usage.input_tokens as u32),
+                    output_tokens: usage.output_tokens as u32,
+                })
+                .unwrap(),
         }))
     }
 }
@@ -315,9 +358,14 @@ impl MessagesStream for AnthropicBedrock {
                                                 types::ToolUseBlock::builder()
                                                     .tool_use_id(id)
                                                     .name(name)
-                                                    .input(aws_smithy_types::Document::String(
-                                                        serde_json::to_string(input).unwrap(),
-                                                    ))
+                                                    .input(
+                                                        serde_json::from_value::<
+                                                            aws_smithy_types::Document,
+                                                        >(
+                                                            input.to_owned()
+                                                        )
+                                                        .unwrap(),
+                                                    )
                                                     .build()
                                                     .unwrap(),
                                             )
@@ -339,6 +387,46 @@ impl MessagesStream for AnthropicBedrock {
                     .system
                     .map(|system| vec![types::SystemContentBlock::Text(system)]),
             )
+            .tool_config(
+                types::ToolConfiguration::builder()
+                    .set_tools(request.tools.map(|tools| {
+                        tools
+                            .iter()
+                            .map(|tool| {
+                                types::Tool::ToolSpec(
+                                    types::ToolSpecification::builder()
+                                        .name(tool.name.clone())
+                                        .set_description(tool.description.clone())
+                                        .input_schema(types::ToolInputSchema::Json(
+                                            serde_json::to_value(&tool.input_schema)
+                                                .and_then(|val| {
+                                                    serde_json::from_value::<
+                                                        aws_smithy_types::Document,
+                                                    >(
+                                                        val
+                                                    )
+                                                })
+                                                .unwrap(),
+                                        ))
+                                        .build()
+                                        .unwrap(),
+                                )
+                            })
+                            .collect()
+                    }))
+                    .set_tool_choice(request.tool_choice.map(
+                        |tool_choice| match tool_choice.kind {
+                            messages::ToolChoiceKind::Auto => {
+                                types::ToolChoice::Auto(types::AutoToolChoice::builder().build())
+                            }
+                            messages::ToolChoiceKind::Any => {
+                                types::ToolChoice::Any(types::AnyToolChoice::builder().build())
+                            }
+                            messages::ToolChoiceKind::Tool => unreachable!(),
+                        },
+                    ))
+                    .build()?,
+            )
             .inference_config(
                 types::InferenceConfiguration::builder()
                     .set_max_tokens(Some(request.max_tokens as i32))
@@ -350,13 +438,41 @@ impl MessagesStream for AnthropicBedrock {
             .send()
             .await?;
 
+        let model = request.model.clone();
         Ok(stream! {
+            let request_id = response.request_id().unwrap().to_string();
             let mut s = response.stream;
+            let mut event_message_delta: Option<EventMessageDelta> = None;
+            let mut block_starts = HashSet::new();
+
+            yield Ok(Event::MessageStart {
+                message: MessageResponse {
+                    id: request_id,
+                    kind: "message".into(),
+                    model,
+                    role: "assistant".into(),
+                    content: vec![],
+                    stop_reason: None,
+                    stop_sequence: None,
+                    usage: Usage { input_tokens: None, output_tokens: 0 },
+                },
+            });
+
+
             while let Ok(Some(event)) = s.recv().await {
-                yield match event {
-                    types::ConverseStreamOutput::ContentBlockDelta(block_delta) =>
-                        Ok(Event::ContentBlockDelta {
-                            index: block_delta.content_block_index() as u64,
+                match event {
+                    types::ConverseStreamOutput::ContentBlockDelta(block_delta) => {
+                        let index = block_delta.content_block_index() as u64;
+                        if !block_starts.contains(&index) {
+                            block_starts.insert(index);
+                            yield Ok(Event::ContentBlockStart {
+                                index,
+                                content_block: ContentPart::Text { text: "".into() },
+                            });
+                        }
+
+                        yield Ok(Event::ContentBlockDelta {
+                            index,
                             delta: match block_delta.delta() {
                                 Some(content_block_delta) => match content_block_delta {
                                     types::ContentBlockDelta::Text(text) =>
@@ -369,8 +485,14 @@ impl MessagesStream for AnthropicBedrock {
                                 },
                                 None => unreachable!(),
                             }
-                        }),
-                    types::ConverseStreamOutput::ContentBlockStart(block_start) => Ok(Event::ContentBlockStart {
+                        })},
+                    types::ConverseStreamOutput::ContentBlockStart(block_start) => {
+                        let index = block_start.content_block_index as u64;
+                        if !block_starts.contains(&index) {
+                            block_starts.insert(index);
+                        }
+
+                        yield Ok(Event::ContentBlockStart {
                         index: block_start.content_block_index as u64,
                         content_block: match block_start.start {
                             Some(start) => match start {
@@ -383,14 +505,49 @@ impl MessagesStream for AnthropicBedrock {
                             },
                             None => ContentPart::Text { text: "".into() },
                         }
-                    }),
+                    })},
                     types::ConverseStreamOutput::ContentBlockStop(block_stop) =>
-                        Ok(Event::ContentBlockStop {
+                        yield Ok(Event::ContentBlockStop {
                             index: block_stop.content_block_index as u64,
                         }),
-                    types::ConverseStreamOutput::MessageStart(_) => continue,
-                    types::ConverseStreamOutput::MessageStop(_) => Ok(Event::MessageStop),
-                    _ => unreachable!(),
+                    types::ConverseStreamOutput::MessageStart(_) => {
+                        continue
+                    },
+                    types::ConverseStreamOutput::MessageStop(mess_stop) => {
+                        if event_message_delta.is_some() {
+                            yield Err(anyhow!("duplicated message delta"))
+                        } else {
+                            event_message_delta.replace(EventMessageDelta {
+                                stop_reason: match mess_stop.stop_reason {
+                                    types::StopReason::EndTurn => StopReason::EndTurn,
+                                    types::StopReason::MaxTokens => StopReason::MaxTokens,
+                                    types::StopReason::StopSequence => StopReason::StopSequence,
+                                    types::StopReason::ToolUse => StopReason::ToolUse,
+                                    _ => unreachable!(),
+                                },
+                                stop_sequence: None,
+                            });
+                            continue;
+                        }
+                    },
+                    types::ConverseStreamOutput::Metadata(metadata) =>
+                    if event_message_delta.is_none() {
+                        yield Err(anyhow!("no message delta"))
+                    } else {
+                        let metadata = metadata.usage.unwrap();
+                        yield Ok(Event::MessageDelta {
+                            delta: event_message_delta.take().unwrap(),
+                            usage: Usage {
+                                input_tokens: Some(metadata.input_tokens as u32),
+                                output_tokens: metadata.output_tokens as u32
+                            }
+                        });
+                        yield Ok(Event::MessageStop)
+                    }
+                    e => {
+                        dbg!(e);
+                        unreachable!()
+                    },
                 }
             }
         }

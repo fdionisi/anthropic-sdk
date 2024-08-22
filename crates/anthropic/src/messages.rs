@@ -147,9 +147,9 @@ impl From<ToolChoiceKind> for ToolChoice {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ToolInputSchema {
     #[serde(rename = "type")]
-    pub type_: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<Value>,
+    pub kind: String,
+    pub properties: Value,
+    pub required: Vec<String>,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
