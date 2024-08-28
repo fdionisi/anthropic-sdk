@@ -57,7 +57,7 @@ struct BedrockCreateMessageRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     stop_sequences: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    system: Option<String>,
+    system: Option<Content>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -216,11 +216,24 @@ impl Messages for AnthropicBedrock {
                     })
                     .collect(),
             ))
-            .set_system(
-                request
-                    .system
-                    .map(|system| vec![types::SystemContentBlock::Text(system)]),
-            )
+            .set_system(request.system.map(|system| {
+                match system {
+                    Content::Single(system) => vec![types::SystemContentBlock::Text(system)],
+                    Content::Multi(parts) => parts
+                        .iter()
+                        .filter_map(|part| match part {
+                            ContentPart::Text { text } => {
+                                Some(types::SystemContentBlock::Text(text.to_owned()))
+                            }
+                            ContentPart::TextDelta { .. }
+                            | ContentPart::ToolResult { .. }
+                            | ContentPart::ToolUse { .. }
+                            | ContentPart::Image { .. }
+                            | ContentPart::InputJsonDelta { .. } => None,
+                        })
+                        .collect(),
+                }
+            }))
             .inference_config(
                 types::InferenceConfiguration::builder()
                     .set_max_tokens(Some(request.max_tokens as i32))
@@ -426,11 +439,24 @@ impl MessagesStream for AnthropicBedrock {
                     })
                     .collect(),
             ))
-            .set_system(
-                request
-                    .system
-                    .map(|system| vec![types::SystemContentBlock::Text(system)]),
-            )
+            .set_system(request.system.map(|system| {
+                match system {
+                    Content::Single(system) => vec![types::SystemContentBlock::Text(system)],
+                    Content::Multi(parts) => parts
+                        .iter()
+                        .filter_map(|part| match part {
+                            ContentPart::Text { text } => {
+                                Some(types::SystemContentBlock::Text(text.to_owned()))
+                            }
+                            ContentPart::TextDelta { .. }
+                            | ContentPart::ToolResult { .. }
+                            | ContentPart::ToolUse { .. }
+                            | ContentPart::Image { .. }
+                            | ContentPart::InputJsonDelta { .. } => None,
+                        })
+                        .collect(),
+                }
+            }))
             .inference_config(
                 types::InferenceConfiguration::builder()
                     .set_max_tokens(Some(request.max_tokens as i32))

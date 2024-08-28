@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use anthropic::messages::{
-    CreateMessageRequestWithStream, Message, Metadata, Requester, Tool, ToolChoice,
+    Content, CreateMessageRequestWithStream, Message, Metadata, Requester, Tool, ToolChoice,
 };
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -105,7 +105,7 @@ struct VertexAiCreateMessageRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     stop_sequences: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    system: Option<String>,
+    system: Option<Content>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -127,7 +127,7 @@ impl From<CreateMessageRequestWithStream> for VertexAiCreateMessageRequest {
             max_tokens: value.create_message_request.max_tokens,
             metadata: value.create_message_request.metadata,
             stop_sequences: value.create_message_request.stop_sequences,
-            system: value.create_message_request.system,
+            system: value.create_message_request.system.map(|s| s.into()),
             temperature: value.create_message_request.temperature,
             tool_choice: value.create_message_request.tool_choice,
             tools: value.create_message_request.tools,

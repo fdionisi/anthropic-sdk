@@ -173,7 +173,7 @@ pub struct CreateMessageRequest {
     #[serde(rename = "stop_sequences")]
     pub stop_sequences: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<String>,
+    pub system: Option<Content>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -359,7 +359,7 @@ impl CreateMessageRequestBuilder {
                 .ok_or_else(|| anyhow!("max_tokens is required"))?,
             metadata: self.metadata,
             stop_sequences: self.stop_sequences,
-            system: self.system,
+            system: self.system.map(|s| s.into()),
             temperature: self.temperature,
             tool_choice: self.tool_choice,
             tools: self.tools,
