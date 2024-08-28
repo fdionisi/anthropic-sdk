@@ -4,7 +4,8 @@ pub use anthropic::messages;
 use anthropic::messages::{
     Content, ContentPart, CreateMessageRequest, CreateMessageRequestWithStream,
     CreateMessageResponse, Event, EventMessageDelta, ImageSource, MediaType, Message,
-    MessageResponse, Messages, MessagesStream, Metadata, StopReason, Tool, ToolChoice, Usage,
+    MessageResponse, MessageResponseStream, Messages, MessagesStream, Metadata, StopReason, Tool,
+    ToolChoice, Usage,
 };
 use anyhow::{anyhow, Result};
 use async_stream::stream;
@@ -254,7 +255,7 @@ impl Messages for AnthropicBedrock {
 
         Ok(CreateMessageResponse::Message(MessageResponse {
             id: response.request_id().unwrap().to_string(),
-            kind: "message".to_string(),
+            // kind: "message".to_string(),
             model: request.model,
             role: "assistant".to_string(),
             content: message
@@ -480,15 +481,17 @@ impl MessagesStream for AnthropicBedrock {
             let mut block_starts = HashSet::new();
 
             yield Ok(Event::MessageStart {
-                message: MessageResponse {
-                    id: request_id,
+                message: MessageResponseStream {
                     kind: "message".into(),
-                    model,
-                    role: "assistant".into(),
-                    content: vec![],
-                    stop_reason: None,
-                    stop_sequence: None,
-                    usage: Usage { input_tokens: None, output_tokens: 0 },
+                    message_response: MessageResponse {
+                        id: request_id,
+                        model,
+                        role: "assistant".into(),
+                        content: vec![],
+                        stop_reason: None,
+                        stop_sequence: None,
+                        usage: Usage { input_tokens: None, output_tokens: 0 },
+                    }
                 },
             });
 

@@ -233,14 +233,20 @@ pub struct Usage {
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct MessageResponse {
     pub id: String,
-    #[serde(rename = "type")]
-    pub kind: String,
     pub model: String,
     pub role: String,
     pub content: Vec<ContentPart>,
     pub stop_reason: Option<StopReason>,
     pub stop_sequence: Option<String>,
     pub usage: Usage,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct MessageResponseStream {
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(flatten)]
+    pub message_response: MessageResponse,
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -398,7 +404,7 @@ pub struct EventMessageDelta {
 pub enum Event {
     Ping,
     MessageStart {
-        message: MessageResponse,
+        message: MessageResponseStream,
     },
     ContentBlockStart {
         index: u64,
@@ -438,7 +444,7 @@ where
             stream: false,
         };
 
-        Ok(self
+        let response = self
             .request_builder(
                 format!(
                     "{}{}",
@@ -449,9 +455,11 @@ where
             )
             .await?
             .send()
-            .await?
-            .json()
-            .await?)
+            .await?;
+
+        let text_response = dbg!(response.text().await?);
+
+        Ok(serde_json::from_str(&text_response)?)
     }
 }
 
