@@ -457,9 +457,11 @@ where
             .send()
             .await?;
 
-        let text_response = dbg!(response.text().await?);
-
-        Ok(serde_json::from_str(&text_response)?)
+        if cfg!(feature = "debug") {
+            Ok(serde_json::from_str(&dbg!(response.text().await?))?)
+        } else {
+            Ok(response.json().await?)
+        }
     }
 }
 

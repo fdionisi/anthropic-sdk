@@ -6,6 +6,10 @@ edition = "2021"
 [lib]
 path = "src/anthropic.rs"
 
+[features]
+default = []
+debug = []
+
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
