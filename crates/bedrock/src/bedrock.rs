@@ -198,9 +198,10 @@ impl Messages for AnthropicBedrock {
                                                 types::ToolUseBlock::builder()
                                                     .tool_use_id(id)
                                                     .name(name)
-                                                    .input(aws_smithy_types::Document::String(
-                                                        serde_json::to_string(input).unwrap(),
-                                                    ))
+                                                    .input(
+                                                        serde_json::from_value(input.to_owned())
+                                                            .unwrap(),
+                                                    )
                                                     .build()
                                                     .unwrap(),
                                             )
@@ -281,8 +282,18 @@ impl Messages for AnthropicBedrock {
                             .to_string(),
                         },
                     },
-                    types::ContentBlock::ToolResult(_) => todo!(),
-                    types::ContentBlock::ToolUse(_) => todo!(),
+                    types::ContentBlock::ToolResult(tool_result) => ContentPart::ToolResult {
+                        tool_use_id: tool_result.tool_use_id().to_string(),
+                        content: match tool_result.content().first() {
+                            Some(types::ToolResultContentBlock::Text(text)) => text.to_owned(),
+                            _ => unreachable!(),
+                        },
+                    },
+                    types::ContentBlock::ToolUse(tool_use) => ContentPart::ToolUse {
+                        id: tool_use.tool_use_id().to_string(),
+                        name: tool_use.name().to_string(),
+                        input: serde_json::to_value(tool_use.input()).unwrap(),
+                    },
                     _ => unreachable!(),
                 })
                 .collect(),
@@ -609,7 +620,7 @@ mod tests {
                 content: Content::Single("Hello".into()),
             }],
             system: Some("system".into()),
-            max_tokens: 100,
+            max_tokens: 8192,
             stop_sequences: None,
             temperature: Some(0.5),
             top_p: None,
