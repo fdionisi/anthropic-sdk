@@ -501,7 +501,8 @@ impl MessagesStream for AnthropicBedrock {
                         content: vec![],
                         stop_reason: None,
                         stop_sequence: None,
-                        usage: Usage { input_tokens: None, output_tokens: 0 },
+                        // FIXME: input_tokens should come from somewhere... Not sure where though
+                        usage: Usage { input_tokens: Some(0), output_tokens: 0 },
                     }
                 },
             });
