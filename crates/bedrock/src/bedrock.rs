@@ -41,6 +41,20 @@ pub struct AnthropicBedrock {
     client: aws_sdk_bedrockruntime::Client,
 }
 
+fn filter_content_blocks(content: Vec<ContentPart>) -> Vec<ContentPart> {
+    if content
+        .iter()
+        .any(|part| matches!(part, ContentPart::ToolResult { .. }))
+    {
+        content
+            .into_iter()
+            .filter(|part| matches!(part, ContentPart::ToolResult { .. }))
+            .collect()
+    } else {
+        content
+    }
+}
+
 impl AnthropicBedrock {
     pub fn new(config: &SdkConfig) -> Self {
         Self {
@@ -149,7 +163,7 @@ impl Messages for AnthropicBedrock {
                             })
                             .set_content(Some(match m.content.clone() {
                                 Content::Single(text) => vec![types::ContentBlock::Text(text)],
-                                Content::Multi(parts) => parts
+                                Content::Multi(parts) => filter_content_blocks(parts)
                                     .iter()
                                     .map(|part| match part {
                                         messages::ContentPart::Text { text } => {
@@ -378,7 +392,7 @@ impl MessagesStream for AnthropicBedrock {
                             })
                             .set_content(Some(match m.content.clone() {
                                 Content::Single(text) => vec![types::ContentBlock::Text(text)],
-                                Content::Multi(parts) => parts
+                                Content::Multi(parts) => filter_content_blocks(parts)
                                     .iter()
                                     .map(|part| match part {
                                         messages::ContentPart::Text { text } => {
