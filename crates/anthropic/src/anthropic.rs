@@ -90,6 +90,7 @@ impl AnthropicBuilder {
             base_url: self
                 .base_url
                 .to_owned()
+                .or_else(|| std::env::var("ANTHROPIC_BASE_URL").ok().map(|s| s.into()))
                 .unwrap_or_else(|| DEFAULT_API_ENDPOINT.into()),
             client: Client::new(),
         })
