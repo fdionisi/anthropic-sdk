@@ -60,7 +60,7 @@ where
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-#[serde(untagged, rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum MediaType {
     #[serde(rename = "image/jpeg")]
     ImageJpeg,
