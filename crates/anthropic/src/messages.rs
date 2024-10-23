@@ -1,11 +1,12 @@
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow,  Result};
 use async_stream::stream;
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
-use reqwest::RequestBuilder;
-use reqwest_eventsource::{Event as SsrEvent, EventSource};
+use http_client::{http::request::Request, AsyncBody, HttpClient, ResponseAsyncBodyExt};
+use http_client_eventsource::{Event as SsrEvent, EventSource};
+
 use serde_json::Value;
 
 pub trait AnthropicSdk: Messages + MessagesStream {}
@@ -102,7 +103,7 @@ pub enum ContentPart {
         input: Value,
     },
     InputJsonDelta {
-        partial: String,
+        partial_json: String,
     },
 }
 
@@ -377,6 +378,8 @@ impl CreateMessageRequestBuilder {
 
 #[async_trait]
 pub trait Requester: Send + Sync {
+    fn http_client(&self) -> Arc<dyn HttpClient>;
+
     fn base_url(&self) -> String;
 
     fn endpoint_url(&self, body: &CreateMessageRequestWithStream) -> String;
@@ -385,11 +388,11 @@ pub trait Requester: Send + Sync {
         &self,
         url: String,
         body: CreateMessageRequestWithStream,
-    ) -> Result<RequestBuilder>;
+    ) -> Result<Request<AsyncBody>>;
 }
 
 #[async_trait]
-pub trait Messages {
+pub trait Messages: Send + Sync {
     async fn messages(&self, request: CreateMessageRequest) -> Result<CreateMessageResponse>;
 }
 
@@ -444,7 +447,7 @@ where
             stream: false,
         };
 
-        let response = self
+        let request = self
             .request_builder(
                 format!(
                     "{}{}",
@@ -453,15 +456,17 @@ where
                 ),
                 create_message_request_with_stream,
             )
-            .await?
-            .send()
             .await?;
 
-        if cfg!(feature = "debug") {
-            Ok(serde_json::from_str(&dbg!(response.text().await?))?)
-        } else {
-            Ok(response.json().await?)
-        }
+        let text = self
+            .http_client()
+            .send(request)
+            .await
+            .map_err(|e| anyhow!(e))?
+            .text()
+            .await?;
+        dbg!(&text);
+        Ok(serde_json::from_str(&text)?)
     }
 }
 
@@ -479,8 +484,8 @@ where
             stream: true,
         };
 
-        let mut es = EventSource::new(
-            self.request_builder(
+        let request = self
+            .request_builder(
                 format!(
                     "{}{}",
                     self.base_url(),
@@ -488,10 +493,12 @@ where
                 ),
                 create_message_request_with_stream,
             )
-            .await?,
-        )?;
+            .await?;
+
+        let http_client = self.http_client();
 
         Ok(stream! {
+            let mut es = http_client.event_source(request)?;
             while let Some(event) = es.next().await {
                 match event {
                     Ok(SsrEvent::Open) => continue,
@@ -501,8 +508,8 @@ where
                     Err(err) => {
                         es.close();
                         match err {
-                            reqwest_eventsource::Error::StreamEnded => continue,
-                            _ => yield Err(anyhow!("Unknown {}", err)),
+                            http_client_eventsource::error::Error::StreamEnded => continue,
+                            _ => yield Err(anyhow!("unexpected error")),
                         }
                     }
                 }

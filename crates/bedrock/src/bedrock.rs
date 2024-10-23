@@ -403,7 +403,7 @@ impl MessagesStream for AnthropicBedrock {
                                         ContentPart::TextDelta { text: text.to_owned() },
                                     types::ContentBlockDelta::ToolUse(tool_use) =>
                                         ContentPart::InputJsonDelta {
-                                            partial: tool_use.input.to_owned()
+                                            partial_json: tool_use.input.to_owned()
                                         },
                                     _ => unreachable!(),
                                 },

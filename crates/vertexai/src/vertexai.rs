@@ -7,7 +7,13 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use google_cloud_auth::{project::Config, token::DefaultTokenSourceProvider};
 use google_cloud_token::{TokenSource, TokenSourceProvider as _};
-use reqwest::{Client, RequestBuilder};
+use http_client::{
+    http::{
+        header::{AUTHORIZATION, CONTENT_TYPE},
+        Method, Request,
+    },
+    AsyncBody, HttpClient, RequestBuilderExt,
+};
 
 pub use anthropic::messages;
 
@@ -46,7 +52,7 @@ impl FromStr for Model {
 }
 
 pub struct AnthropicVertexAi {
-    client: Client,
+    http_client: Arc<dyn HttpClient>,
     project: String,
     region: String,
     token_source: Arc<dyn TokenSource>,
@@ -55,6 +61,7 @@ pub struct AnthropicVertexAi {
 pub struct AnthropicVertexAiBuilder {
     project: Option<String>,
     region: Option<String>,
+    http_client: Option<Arc<dyn HttpClient>>,
 }
 
 impl AnthropicVertexAi {
@@ -62,18 +69,24 @@ impl AnthropicVertexAi {
         AnthropicVertexAiBuilder {
             project: None,
             region: None,
+            http_client: None,
         }
     }
 }
 
 impl AnthropicVertexAiBuilder {
-    pub fn project(mut self, project: String) -> Self {
+    pub fn with_project(mut self, project: String) -> Self {
         self.project = Some(project);
         self
     }
 
-    pub fn region(mut self, region: String) -> Self {
+    pub fn with_region(mut self, region: String) -> Self {
         self.region = Some(region);
+        self
+    }
+
+    pub fn with_http_client(mut self, http_client: Arc<dyn HttpClient>) -> Self {
+        self.http_client = Some(http_client);
         self
     }
 
@@ -91,7 +104,7 @@ impl AnthropicVertexAiBuilder {
             project: self.project.to_owned().unwrap(),
             region: self.region.to_owned().unwrap(),
             token_source: ts,
-            client: Client::new(),
+            http_client: self.http_client.to_owned().unwrap(),
         })
     }
 }
@@ -141,6 +154,10 @@ impl From<CreateMessageRequestWithStream> for VertexAiCreateMessageRequest {
 
 #[async_trait]
 impl Requester for AnthropicVertexAi {
+    fn http_client(&self) -> Arc<dyn HttpClient> {
+        self.http_client.clone()
+    }
+
     fn base_url(&self) -> String {
         format!(
             "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/anthropic",
@@ -165,31 +182,31 @@ impl Requester for AnthropicVertexAi {
         &self,
         url: String,
         body: CreateMessageRequestWithStream,
-    ) -> Result<RequestBuilder> {
-        let mut req = self.client.post(url);
+    ) -> Result<Request<AsyncBody>> {
+        let mut req = Request::builder().method(Method::POST).uri(url);
+
         if body.stream {
             req = req.header("X-Stainless-Helper-Method", "stream");
         }
 
         Ok(req
+            .header("x-goog-user-project", &self.project)
             .header(
-                reqwest::header::AUTHORIZATION,
+                AUTHORIZATION,
                 self.token_source
                     .token()
                     .await
                     .map_err(|err| anyhow!("{:?}", err))?,
             )
-            .header("x-goog-user-project", &self.project)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(serde_json::to_string(&VertexAiCreateMessageRequest::from(
-                body,
-            ))?))
+            .header(CONTENT_TYPE, "application/json")
+            .json(dbg!(VertexAiCreateMessageRequest::from(body)))?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
+    use http_client_reqwest::HttpClientReqwest;
 
     use crate::messages::{CreateMessageRequest, Message, Messages, MessagesStream};
 
@@ -198,20 +215,25 @@ mod tests {
     #[tokio::test]
     async fn test_messages() -> Result<()> {
         let client = AnthropicVertexAi::builder()
-            .project(std::env::var("GCLOUD_PROJECT_ID")?)
-            .region(std::env::var("GCLOUD_REGION")?)
+            .with_project(std::env::var("GCLOUD_PROJECT_ID")?)
+            .with_region(std::env::var("GCLOUD_REGION")?)
+            .with_http_client(Arc::new(HttpClientReqwest::default()))
             .build()
             .await?;
 
-        let _ = client
-            .messages(
-                CreateMessageRequest::builder()
-                    .model(Model::ClaudeThreeDotFiveSonnet)
-                    .messages(vec![Message::user("Hi!".into())])
-                    .max_tokens(1024)
-                    .build()?,
-            )
-            .await?;
+        let _ = dbg!(
+            client
+                .messages(
+                    CreateMessageRequest::builder()
+                        .model(Model::ClaudeThreeDotFiveSonnet)
+                        .messages(vec![Message::user("Hi!".into())])
+                        .max_tokens(1024)
+                        .build()?,
+                )
+                .await?
+        );
+
+        assert!(false);
 
         Ok(())
     }
@@ -219,8 +241,9 @@ mod tests {
     #[tokio::test]
     async fn test_messages_stream() -> Result<()> {
         let client = AnthropicVertexAi::builder()
-            .project(std::env::var("GCLOUD_PROJECT_ID")?)
-            .region(std::env::var("GCLOUD_REGION")?)
+            .with_project(std::env::var("GCLOUD_PROJECT_ID")?)
+            .with_region(std::env::var("GCLOUD_REGION")?)
+            .with_http_client(Arc::new(HttpClientReqwest::default()))
             .build()
             .await?;
 
@@ -237,6 +260,8 @@ mod tests {
         while let Some(response) = s.next().await {
             response?;
         }
+
+        assert!(false);
 
         Ok(())
     }

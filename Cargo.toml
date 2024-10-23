@@ -10,8 +10,9 @@ anyhow = "1"
 async-stream = "0.3.5"
 async-trait = "0.1.81"
 futures = "0.3.30"
-reqwest = { version = "0.12.5", features = ["json"] }
-reqwest-eventsource = "0.6.0"
+http-client = { git = "https://github.com/fdionisi/http-client", rev = "033ac96ab12ac3d13b78f9725b237380917c7094" }
+http-client-eventsource = { git = "https://github.com/fdionisi/http-client-eventsource", rev = "506482b8946b2da925cc7f6c2b07c1a33d4762e2" }
+http-client-reqwest = { git = "https://github.com/fdionisi/http-client", rev = "033ac96ab12ac3d13b78f9725b237380917c7094" }
 secrecy = "0.8.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

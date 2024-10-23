@@ -1,16 +1,20 @@
 pub mod messages;
 
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use messages::{CreateMessageRequestWithStream, Requester};
-use reqwest::{Client, RequestBuilder};
+use http_client::{
+    http::{header::CONTENT_TYPE, Method, Request},
+    AsyncBody, HttpClient, RequestBuilderExt,
+};
+use messages::{CreateMessageRequestWithStream,  Requester};
 use secrecy::{ExposeSecret, SecretString};
 
 const DEFAULT_API_ENDPOINT: &str = "https://api.anthropic.com";
 const DEFAULT_API_VERSION: &str = "2023-06-01";
 
+#[derive(Clone)]
 pub enum Model {
     ClaudeThreeDotFiveSonnet,
     ClaudeThreeSonnet,
@@ -46,12 +50,14 @@ impl FromStr for Model {
 pub struct Anthropic {
     api_key: SecretString,
     base_url: String,
-    client: Client,
+    http_client: Arc<dyn HttpClient>,
 }
 
+#[derive(Clone)]
 pub struct AnthropicBuilder {
     api_key: Option<SecretString>,
     base_url: Option<String>,
+    http_client: Option<Arc<dyn HttpClient>>,
 }
 
 impl Anthropic {
@@ -59,12 +65,13 @@ impl Anthropic {
         AnthropicBuilder {
             api_key: None,
             base_url: None,
+            http_client: None,
         }
     }
 }
 
 impl AnthropicBuilder {
-    pub fn api_key<S>(&mut self, api_key: S) -> &mut Self
+    pub fn with_api_key<S>(&mut self, api_key: S) -> &mut Self
     where
         S: AsRef<str>,
     {
@@ -72,11 +79,16 @@ impl AnthropicBuilder {
         self
     }
 
-    pub fn base_url<S>(&mut self, base_url: S) -> &mut Self
+    pub fn with_base_url<S>(&mut self, base_url: S) -> &mut Self
     where
         S: AsRef<str>,
     {
         self.base_url = Some(base_url.as_ref().to_string());
+        self
+    }
+
+    pub fn with_http_client(&mut self, http_client: Arc<dyn HttpClient>) -> &mut Self {
+        self.http_client = Some(http_client);
         self
     }
 
@@ -92,13 +104,20 @@ impl AnthropicBuilder {
                 .to_owned()
                 .or_else(|| std::env::var("ANTHROPIC_BASE_URL").ok().map(|s| s.into()))
                 .unwrap_or_else(|| DEFAULT_API_ENDPOINT.into()),
-            client: Client::new(),
+            http_client: self
+                .http_client
+                .to_owned()
+                .ok_or_else(|| anyhow!("http client is required"))?,
         })
     }
 }
 
 #[async_trait]
 impl Requester for Anthropic {
+    fn http_client(&self) -> Arc<dyn HttpClient> {
+        self.http_client.clone()
+    }
+
     fn base_url(&self) -> String {
         self.base_url.to_owned()
     }
@@ -111,8 +130,9 @@ impl Requester for Anthropic {
         &self,
         url: String,
         body: CreateMessageRequestWithStream,
-    ) -> Result<RequestBuilder> {
-        let mut req = self.client.post(url);
+    ) -> Result<Request<AsyncBody>> {
+        let mut req = Request::builder().method(Method::POST).uri(url);
+
         if body.stream {
             req = req.header("X-Stainless-Helper-Method", "stream");
         }
@@ -120,14 +140,15 @@ impl Requester for Anthropic {
         Ok(req
             .header("x-api-key", self.api_key.expose_secret())
             .header("anthropic-version", DEFAULT_API_VERSION)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(serde_json::to_string(&body)?))
+            .header(CONTENT_TYPE, "application/json")
+            .json(body)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
+    use http_client_reqwest::HttpClientReqwest;
     use messages::MessagesStream;
 
     use crate::messages::{CreateMessageRequest, Message, Messages};
@@ -136,24 +157,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_messages() -> Result<()> {
-        let client = Anthropic::builder().build()?;
+        let client = Anthropic::builder()
+            .with_http_client(Arc::new(HttpClientReqwest::default()))
+            .build()?;
 
-        let _ = client
-            .messages(
-                CreateMessageRequest::builder()
-                    .model(Model::ClaudeThreeHaiku)
-                    .messages(vec![Message::user("Hi!".into())])
-                    .max_tokens(100)
-                    .build()?,
-            )
-            .await?;
+        let _ = dbg!(
+            client
+                .messages(
+                    CreateMessageRequest::builder()
+                        .model(Model::ClaudeThreeHaiku)
+                        .messages(vec![Message::user("Hi!".into())])
+                        .max_tokens(100)
+                        .build()?,
+                )
+                .await?
+        );
 
         Ok(())
     }
 
     #[tokio::test]
     async fn test_messages_stream() -> Result<()> {
-        let client = Anthropic::builder().build()?;
+        let client = Anthropic::builder()
+            .with_http_client(Arc::new(HttpClientReqwest::default()))
+            .build()?;
 
         let mut s = client
             .messages_stream(
@@ -165,6 +192,7 @@ mod tests {
             )
             .await?;
 
+        dbg!(s.next().await);
         while let Some(response) = s.next().await {
             dbg!(response)?;
         }
