@@ -29,7 +29,7 @@ pub enum Model {
 impl ToString for Model {
     fn to_string(&self) -> String {
         match self {
-            Model::ClaudeThreeDotFiveSonnet => "claude-3-5-sonnet@20240620".to_string(),
+            Model::ClaudeThreeDotFiveSonnet => "claude-3-5-sonnet-v2@20241022".to_string(),
             Model::ClaudeThreeSonnet => "claude-3-sonnet@20240229".to_string(),
             Model::ClaudeThreeOpus => "claude-3-opus@20240229".to_string(),
             Model::ClaudeThreeHaiku => "claude-3-haiku@20240307".to_string(),
@@ -42,7 +42,9 @@ impl FromStr for Model {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "claude-3-5-sonnet@20240620" => Ok(Model::ClaudeThreeDotFiveSonnet),
+            "claude-3-5-sonnet@20240620" | "claude-3-5-sonnet-v2@20241022" => {
+                Ok(Model::ClaudeThreeDotFiveSonnet)
+            }
             "claude-3-sonnet@20240229" => Ok(Model::ClaudeThreeSonnet),
             "claude-3-opus@20240229" => Ok(Model::ClaudeThreeOpus),
             "claude-3-haiku@20240307" => Ok(Model::ClaudeThreeHaiku),

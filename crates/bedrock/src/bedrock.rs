@@ -28,11 +28,11 @@ impl ToString for Model {
     fn to_string(&self) -> String {
         match self {
             Model::ClaudeThreeDotFiveSonnet => {
-                "anthropic.claude-3-5-sonnet-20240620-v1:0".to_string()
+                "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string()
             }
             Model::ClaudeThreeSonnet => "anthropic.claude-3-sonnet-20240229-v1:0".to_string(),
             Model::ClaudeThreeOpus => "anthropic.claude-3-opus-20240229-v1:0".to_string(),
-            Model::ClaudeThreeHaiku => "anthropic.claude-3-5-sonnet-20240620-v1:0".to_string(),
+            Model::ClaudeThreeHaiku => "anthropic.claude-3-haiku-20240307-v1:0".to_string(),
         }
     }
 }
