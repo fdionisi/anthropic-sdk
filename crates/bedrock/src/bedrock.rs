@@ -19,6 +19,7 @@ const DEFAULT_API_VERSION: &str = "bedrock-2023-05-31";
 
 pub enum Model {
     ClaudeThreeDotFiveSonnet,
+    ClaudeThreeDotFiveSonnetV1,
     ClaudeThreeSonnet,
     ClaudeThreeOpus,
     ClaudeThreeHaiku,
@@ -29,6 +30,9 @@ impl ToString for Model {
         match self {
             Model::ClaudeThreeDotFiveSonnet => {
                 "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string()
+            }
+            Model::ClaudeThreeDotFiveSonnetV1 => {
+                "anthropic.claude-3-5-sonnet-20240620-v1:0".to_string()
             }
             Model::ClaudeThreeSonnet => "anthropic.claude-3-sonnet-20240229-v1:0".to_string(),
             Model::ClaudeThreeOpus => "anthropic.claude-3-opus-20240229-v1:0".to_string(),
