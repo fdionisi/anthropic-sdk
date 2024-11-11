@@ -1,12 +1,13 @@
 use std::{pin::Pin, sync::Arc};
 
-use anyhow::{anyhow,  Result};
+use anyhow::{anyhow, Result};
 use async_stream::stream;
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use http_client::{http::request::Request, AsyncBody, HttpClient, ResponseAsyncBodyExt};
 use http_client_eventsource::{Event as SsrEvent, EventSource};
 
+use serde::Deserializer;
 use serde_json::Value;
 
 pub trait AnthropicSdk: Messages + MessagesStream {}
@@ -32,6 +33,7 @@ impl std::fmt::Display for Role {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Message {
     pub role: Role,
+    #[serde(deserialize_with = "content_deserializer")]
     pub content: Content,
 }
 
@@ -44,7 +46,7 @@ impl Message {
     }
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize)]
 #[serde(untagged)]
 pub enum Content {
     Single(String),
@@ -57,6 +59,36 @@ where
 {
     fn from(text: S) -> Self {
         Self::Single(text.as_ref().to_string())
+    }
+}
+
+fn content_deserializer<'de, D>(d: D) -> Result<Content, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(optional_content_deserializer::<_>(d)?.unwrap())
+}
+
+fn optional_content_deserializer<'de, D>(d: D) -> Result<Option<Content>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum ContentDeserializeHelper<'a> {
+        None,
+        Single(&'a str),
+        Multi(Vec<ContentPart>),
+    }
+
+    match ContentDeserializeHelper::deserialize(d) {
+        Ok(ContentDeserializeHelper::None) => Ok(None),
+        Ok(ContentDeserializeHelper::Multi(r)) => Ok(Some(Content::Multi(r))),
+        Ok(ContentDeserializeHelper::Single(s)) if s.is_empty() => Ok(None),
+        Ok(ContentDeserializeHelper::Single(s)) => Ok(Some(Content::Single(s.to_string()))),
+        Err(err) => Err(err),
     }
 }
 
@@ -130,7 +162,7 @@ pub struct Metadata {
 pub enum ToolChoiceKind {
     Auto,
     Any,
-    Tool,
+    Tool { name: String },
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -173,7 +205,10 @@ pub struct CreateMessageRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "stop_sequences")]
     pub stop_sequences: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "optional_content_deserializer"
+    )]
     pub system: Option<Content>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,

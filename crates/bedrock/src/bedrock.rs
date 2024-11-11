@@ -138,16 +138,18 @@ fn attach_tools(
 fn attach_tool_choice(
     tool_config: types::builders::ToolConfigurationBuilder,
     tool_choice: ToolChoice,
-) -> types::builders::ToolConfigurationBuilder {
-    tool_config.set_tool_choice(Some(match tool_choice.kind {
+) -> Result<types::builders::ToolConfigurationBuilder> {
+    Ok(tool_config.set_tool_choice(Some(match tool_choice.kind {
         messages::ToolChoiceKind::Auto => {
             types::ToolChoice::Auto(types::AutoToolChoice::builder().build())
         }
         messages::ToolChoiceKind::Any => {
             types::ToolChoice::Any(types::AnyToolChoice::builder().build())
         }
-        messages::ToolChoiceKind::Tool => unreachable!(),
-    }))
+        messages::ToolChoiceKind::Tool { name } => {
+            types::ToolChoice::Tool(types::SpecificToolChoice::builder().name(name).build()?)
+        }
+    })))
 }
 
 fn parse_messages(message: &Message) -> types::Message {
@@ -238,7 +240,7 @@ impl Messages for AnthropicBedrock {
         }
 
         if let Some(tool_choice) = request.tool_choice.to_owned() {
-            test_config = attach_tool_choice(test_config, tool_choice);
+            test_config = attach_tool_choice(test_config, tool_choice)?;
         }
 
         let mut bd_request = self
@@ -339,7 +341,7 @@ impl MessagesStream for AnthropicBedrock {
         }
 
         if let Some(tool_choice) = request.tool_choice.to_owned() {
-            test_config = attach_tool_choice(test_config, tool_choice);
+            test_config = attach_tool_choice(test_config, tool_choice)?;
         }
 
         let mut bd_request = self
