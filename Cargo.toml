@@ -9,11 +9,11 @@ anthropic_vertexai = { path = "crates/vertexai" }
 anyhow = "1"
 async-stream = "0.3.5"
 async-trait = "0.1.81"
-futures = "0.3.30"
-http-client = { git = "https://github.com/fdionisi/http-client", rev = "033ac96ab12ac3d13b78f9725b237380917c7094" }
-http-client-eventsource = { git = "https://github.com/fdionisi/http-client-eventsource", rev = "506482b8946b2da925cc7f6c2b07c1a33d4762e2" }
-http-client-reqwest = { git = "https://github.com/fdionisi/http-client", rev = "033ac96ab12ac3d13b78f9725b237380917c7094" }
-secrecy = "0.8.0"
+futures = "0.3"
+http-client = { git = "https://github.com/fdionisi/http-client", rev = "c4a778815ecb94411f7db6385052655b181a9676" }
+http-client-eventsource = { git = "https://github.com/fdionisi/http-client-eventsource", rev = "32103c902afb6ab18e934f8e1f0e597614f86cef" }
+http-client-reqwest = { git = "https://github.com/fdionisi/http-client", rev = "c4a778815ecb94411f7db6385052655b181a9676" }
+secrecy = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
